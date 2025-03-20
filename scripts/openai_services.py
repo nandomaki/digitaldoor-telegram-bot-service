@@ -12,7 +12,7 @@ regras = validations.QUESTAO_1
 prompt = f"""
 {regras}
 
-Nome informado: '{mensagem}'
+Mensagem: '{mensagem}'
 
 Apenas responda `TRUE` ou `FALSE` sem explicações.
 """
