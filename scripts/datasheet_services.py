@@ -3,6 +3,7 @@ import gspread
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 
+
 class DataSheetServices:
     def __init__(self):
         """
@@ -30,8 +31,8 @@ class DataSheetServices:
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
             "client_x509_cert_url": (
-                "https://www.googleapis.com/robot/v1/metadata/x509/"
-                + os.environ["GOOGLE_CLIENT_EMAIL"].replace("@", "%40")
+                    "https://www.googleapis.com/robot/v1/metadata/x509/"
+                    + os.environ["GOOGLE_CLIENT_EMAIL"].replace("@", "%40")
             )
         }
 
@@ -39,8 +40,8 @@ class DataSheetServices:
         self.client = gspread.authorize(self.creds)
 
         # IDs de cada planilha no .env
-        self.sheet_id_control = os.environ["SHEET_ID"]
-        self.sheet_id_questions = os.environ["SHEET_QUESTIONS"]
+        self.sheet_id_control = os.environ["SHEET_ID"]  # Planilha de controle
+        self.sheet_id_questions = os.environ["SHEET_QUESTIONS"]  # Planilha de respostas
 
         # Abre cada planilha
         self.spreadsheet_control = self.client.open_by_key(self.sheet_id_control)
@@ -50,26 +51,44 @@ class DataSheetServices:
         self.sheet_control = self.spreadsheet_control.sheet1
         self.sheet_questions = self.spreadsheet_questions.sheet1
 
-    # ---------------- Planilha de CONTROLE (SHEET_ID) ----------------
-
-    def get_all_values_control(self, sheet_name=None):
-        """Retorna todas as linhas da planilha de controle."""
-        if sheet_name:
-            ws = self.spreadsheet_control.worksheet(sheet_name)
-            return ws.get_all_values()
+    # -------------------------- Método genérico get_all_values --------------------------
+    def get_all_values(self, planilha: str = "control", sheet_name: str = None):
+        """
+        Lê todos os valores de uma determinada planilha (control ou questions).
+        :param planilha: "control" para planilha de controle, "questions" para planilha de respostas.
+        :param sheet_name: opcional, nome da aba. Se None, usa a aba padrão (sheet1).
+        :return: lista de listas contendo os valores
+        """
+        if planilha == "control":
+            ws = (
+                self.spreadsheet_control.worksheet(sheet_name)
+                if sheet_name
+                else self.sheet_control
+            )
+        elif planilha == "questions":
+            ws = (
+                self.spreadsheet_questions.worksheet(sheet_name)
+                if sheet_name
+                else self.sheet_questions
+            )
         else:
-            return self.sheet_control.get_all_values()
+            raise ValueError("Parâmetro 'planilha' inválido. Use 'control' ou 'questions'.")
+
+        return ws.get_all_values()
+
+    # ---------------- Planilha de CONTROLE (SHEET_ID) ----------------
 
     def get_user_info(self, user_id: str, sheet_name=None):
         """
-        Retorna (nome, questao, id_questionario) do user_id.
+        Retorna (nome, questao, id_questionario) do user_id na planilha de controle.
         Se não achar, retorna (None, None, None).
-        Cabeçalho esperado: [id_usuario, Nome, Questao, id_questionario]
+        Esperamos no cabeçalho: [id_usuario, Nome, Questao, id_questionario]
         """
-        data = self.get_all_values_control(sheet_name)
+        data = self.get_all_values(planilha="control", sheet_name=sheet_name)
         if not data:
             return (None, None, None)
 
+        # data[0] é o cabeçalho
         for row in data[1:]:
             if row and len(row) >= 4:
                 # row[0] = id_usuario
@@ -83,12 +102,12 @@ class DataSheetServices:
     def update_user_info(self, user_id: str, nome=None, questao=None, id_questionario=None, sheet_name=None):
         """
         Atualiza/cria a linha do user_id na planilha de controle.
-        Se não existir, cria. Sobrescreve a planilha inteira.
-        (Para simplificar; em produção, você pode fazer algo mais incremental)
+        Se não existir, cria. Sobrescreve a planilha inteira para simplicidade.
         """
-        ws = self.spreadsheet_control.worksheet(sheet_name) if sheet_name else self.sheet_control
-        data = ws.get_all_values()
+        # Carrega todos os valores da planilha de controle
+        data = self.get_all_values(planilha="control", sheet_name=sheet_name)
 
+        # Se estiver vazia, cria cabeçalho padrão
         if not data:
             data = [["id_usuario", "Nome", "Questao", "id_questionario"]]
 
@@ -118,48 +137,61 @@ class DataSheetServices:
             data.append(new_row)
 
         # Regrava a planilha
+        ws = (
+            self.spreadsheet_control.worksheet(sheet_name)
+            if sheet_name
+            else self.sheet_control
+        )
         ws.clear()
         ws.update("A1", data)
 
-    # ---------------- Planilha de RESPOSTAS (SHEET_QUESTIONS) ----------------
+    def user_exists(self, user_id: str, sheet_name=None) -> bool:
+        """
+        Retorna True se user_id existe na planilha de controle, False se não existe.
+        """
+        data = self.get_all_values(planilha="control", sheet_name=sheet_name)
+        if len(data) < 2:
+            return False  # só cabeçalho ou nada
 
-    def get_all_values_questions(self, sheet_name=None):
-        """Retorna todas as linhas da planilha de respostas."""
-        if sheet_name:
-            ws = self.spreadsheet_questions.worksheet(sheet_name)
-            return ws.get_all_values()
-        else:
-            return self.sheet_questions.get_all_values()
+        # pula o cabeçalho data[0]
+        for row in data[1:]:
+            if row and row[0] == user_id:
+                return True
+        return False
+
+    # ---------------- Planilha de RESPOSTAS (SHEET_QUESTIONS) ----------------
 
     def update_answer_in_columns(self, id_questionario: str, question_number: int, answer: str, sheet_name=None):
         """
         Atualiza a planilha de respostas para que:
-          - A coluna 'question_number' (que deve existir no cabeçalho: '1','2','3', etc.)
+          - A coluna 'question_number' no cabeçalho (strings "1","2","3", etc.)
           - A linha com id_questionario == row[0]
-        receba o 'answer'.
-
+        receba 'answer'.
         Exemplo de cabeçalho:
         [id_questionario, "1", "2", "3", "4", "5", "6", "7"]
         """
-        ws = self.spreadsheet_questions.worksheet(sheet_name) if sheet_name else self.sheet_questions
+        # Lê tudo da planilha "questions"
+        ws = (
+            self.spreadsheet_questions.worksheet(sheet_name)
+            if sheet_name
+            else self.sheet_questions
+        )
         data = ws.get_all_values()
+
+        # Se estiver vazia, cria um cabeçalho padrão (até 7 perguntas, por ex.)
         if not data:
-            # Cria cabeçalho mínimo: 8 colunas (7 perguntas + id_questionario)
             data = [["id_questionario", "1", "2", "3", "4", "5", "6", "7"]]
 
         header = data[0]
 
-        # A primeira coluna (col 0) é id_questionario, as seguintes correspondem às perguntas
-        # question_number=1 -> header[1]
-        # question_number=2 -> header[2], etc.
+        # question_number=1 -> header[1] ...
         if question_number >= len(header):
-            raise ValueError(f"Não há coluna para a pergunta #{question_number}. Verifique seu cabeçalho.")
+            raise ValueError(f"Não há coluna para a pergunta #{question_number}. Verifique o cabeçalho.")
 
-        # Procura a linha do id_questionario
         found = False
         for i, row in enumerate(data[1:], start=1):
             if row and row[0] == id_questionario:
-                # Garante que a linha tenha tamanho suficiente
+                # Garante que a linha tenha colunas suficientes
                 while len(row) < len(header):
                     row.append("")
                 row[question_number] = answer
