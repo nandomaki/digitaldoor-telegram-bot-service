@@ -209,3 +209,36 @@ class DataSheetServices:
         # Sobrescreve a planilha
         ws.clear()
         ws.update("A1", data)
+
+    def remove_user_info(self, user_id: str, sheet_name=None) -> bool:
+        """
+        Remove a linha que contém 'user_id' na primeira coluna (id_usuario).
+        Retorna True se encontrou e removeu, ou False se não encontrou.
+        """
+        # Acessa a aba da planilha de controle
+        ws = self.spreadsheet_control.worksheet(sheet_name) if sheet_name else self.sheet_control
+        data = ws.get_all_values()
+
+        # Se a planilha estiver vazia ou só com cabeçalho, não há o que remover
+        if len(data) < 2:
+            return False
+
+        header = data[0]
+        new_data = [header]  # Manter o cabeçalho na nova lista
+        removed = False
+
+        # Percorre as linhas, pulando o cabeçalho (data[1:])
+        for row in data[1:]:
+            # row[0] é o 'id_usuario'
+            if row and row[0] == user_id:
+                removed = True  # Encontrou o usuário, não adiciona a 'new_data'
+            else:
+                new_data.append(row)
+
+        # Se encontrou e removeu, atualiza a planilha
+        if removed:
+            ws.clear()
+            ws.update("A1", new_data)
+
+        return removed
+

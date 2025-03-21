@@ -12,18 +12,21 @@ bot = telebot.TeleBot(CHAVE_API)
 datasheet = DataSheetServices()
 openai_services = OpenAIServices()
 
-
+## FUNÇÔES DE CONTROLE DE USUÀRIOS
 @bot.message_handler(commands=['options'])
 def options(message):
-    text = """Escolha as opções que deseja fazer:
+    text = """
+    Escolha as opções que deseja fazer:
 
-    1 - /addNewUser para adicionar um novo usuário
-    2- /deleteUser para deletar um usuário
-
-    Clique na opção desejada....
+        1 - /addNewUser para adicionar um novo usuário
+        2 - /deleteUser para deletar um usuário
+    
+    Clique na opção desejada.
     """
     bot.reply_to(message, text)
 
+
+## FUNÇÔES DE CADICIONAR NOVO USUÁRIOS
 
 @bot.message_handler(commands=['addNewUser'])
 def add_new_user(message):
@@ -54,6 +57,40 @@ def add_new_user(message):
     bot.reply_to(message, text)
 
 
+## FUNÇÔES DE REMOÇÃO DE USUARIOS
+
+@bot.message_handler(commands=['deleteUser'])
+def deleteUser(message):
+    text = """
+    "Você realmente deseja apagar seu usuário? (O histórico de serviços não será exluído!)
+        /sim_excluir se deseja a exclusão
+        /cancelar para cancelar este comando
+    """
+    bot.send_message(message.chat.id,text)
+
+
+@bot.message_handler(commands=['cancelar'])
+def cancelar(message):
+    bot.send_message(message.chat.id, "Operação cancelada!")
+
+
+@bot.message_handler(commands=['sim_excluir'])
+def sim_excluir(message):
+
+    user_id_str = str(message.from_user.id)
+    user_existe = datasheet.user_exists(user_id_str)
+    if user_existe:
+        was_removed = datasheet.remove_user_info("6034551546")
+        if was_removed:
+            bot.send_message(message.chat.id, "Você foi removido com sucesso!")
+        else:
+            bot.send_message(message.chat.id, "Não foi possível sua remoção.")
+    else:
+        bot.send_message(message.chat.id, "Você não está cadastrado! Digite /options para cadastrar.")
+
+
+
+## FUNÇÔES DE PRINCIPAL
 @bot.message_handler(func=lambda msg: True)
 def handle_message(message):
     """Handler genérico para TODAS as mensagens que não sejam comandos.
@@ -70,7 +107,6 @@ def handle_message(message):
         if questao_str == '-99':
             # Valida nome usando OpenAI
             nome_valido = openai_services.validarResposta(1, message.text)
-            print(nome_valido)
 
             if nome_valido.strip().upper() == 'TRUE':
                 # Atualiza o cadastro para questao=0 e insere o nome
