@@ -12,7 +12,9 @@ bot = telebot.TeleBot(CHAVE_API)
 datasheet = DataSheetServices()
 openai_services = OpenAIServices()
 
-## FUNÇÔES DE CONTROLE DE USUÀRIOS
+
+################ FUNÇÔES DE CONTROLE DE USUÀRIOS ################
+
 @bot.message_handler(commands=['options'])
 def options(message):
     text = """
@@ -26,7 +28,7 @@ def options(message):
     bot.reply_to(message, text)
 
 
-## FUNÇÔES DE CADICIONAR NOVO USUÁRIOS
+################ FUNÇÔES DE CADICIONAR NOVO USUÁRIOS ################
 
 @bot.message_handler(commands=['addNewUser'])
 def add_new_user(message):
@@ -57,7 +59,7 @@ def add_new_user(message):
     bot.reply_to(message, text)
 
 
-## FUNÇÔES DE REMOÇÃO DE USUARIOS
+################ FUNÇÔES DE PRINCIPAL# FUNÇÔES DE REMOÇÃO DE USUARIOS ################
 
 @bot.message_handler(commands=['deleteUser'])
 def deleteUser(message):
@@ -89,8 +91,8 @@ def sim_excluir(message):
         bot.send_message(message.chat.id, "Você não está cadastrado! Digite /options para cadastrar.")
 
 
+############### FUNÇÔES DE PRINCIPAL ################
 
-## FUNÇÔES DE PRINCIPAL
 @bot.message_handler(func=lambda msg: True)
 def handle_message(message):
     """Handler genérico para TODAS as mensagens que não sejam comandos.
@@ -160,7 +162,6 @@ def handle_message(message):
             message.chat.id,
             "Você não está cadastrado, favor Cadastre-se. Digite /options para abrir a tela de opções."
         )
-
 
 
 def bot_teste():
