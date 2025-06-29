@@ -168,7 +168,7 @@ class DataSheetServices:
           - A linha com id_questionario == row[0]
         receba 'answer'.
         Exemplo de cabeçalho:
-        [id_questionario, "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"]
+        [id_questionario, "1", "2", "3", "4", "5", "6", "7"]
         """
         # Lê tudo da planilha "questions"
         ws = (
@@ -178,31 +178,9 @@ class DataSheetServices:
         )
         data = ws.get_all_values()
 
-        # Se estiver vazia, cria um cabeçalho padrão (até 20 perguntas, por ex.)
+        # Se estiver vazia, cria um cabeçalho padrão (até 7 perguntas, por ex.)
         if not data:
-            data = [[
-                "id_questionario",
-                "1",
-                "2",
-                "3",
-                "4",
-                "5",
-                "6",
-                "7",
-                "8",
-                "9",
-                "10",
-                "11",
-                "12",
-                "13",
-                "14",
-                "15",
-                "16",
-                "17",
-                "18",
-                "19",
-                "20",
-            ]]
+            data = [["id_questionario", "1", "2", "3", "4", "5", "6", "7"]]
 
         header = data[0]
 
