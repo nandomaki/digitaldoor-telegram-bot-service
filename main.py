@@ -1,9 +1,7 @@
 from scripts import bot_telegram
 
-
 def main():
-    bot_telegram.run_bot()
+    print("hello world")
 
-
-if __name__ == "__main__":
-    main()
+if __name__ =="__main__":
+    bot_telegram.bot_teste()
