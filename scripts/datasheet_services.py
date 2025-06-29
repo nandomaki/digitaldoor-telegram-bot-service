@@ -1,11 +1,12 @@
-import os
 import gspread
-from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
+import logging
+
+import config
 
 
 class DataSheetServices:
-    def __init__(self):
+    def __init__(self, client: gspread.Client | None = None):
         """
         Inicializa a conexão com DUAS planilhas separadas:
           - Planilha de controle (SHEET_ID)
@@ -13,7 +14,7 @@ class DataSheetServices:
         Lendo as credenciais de variáveis de ambiente.
         """
 
-        load_dotenv()
+        # Credentials and sheet IDs are loaded from config
 
         self.SCOPES = [
             "https://www.googleapis.com/auth/spreadsheets",
@@ -22,30 +23,34 @@ class DataSheetServices:
 
         service_account_info = {
             "type": "service_account",
-            "project_id": os.environ["GOOGLE_PROJECT_ID"],
-            "private_key_id": os.environ["GOOGLE_PRIVATE_KEY_ID"],
-            "private_key": os.environ["GOOGLE_PRIVATE_KEY"].replace("\\n", "\n"),
-            "client_email": os.environ["GOOGLE_CLIENT_EMAIL"],
-            "client_id": os.environ["GOOGLE_CLIENT_ID"],
+            "project_id": config.GOOGLE_PROJECT_ID,
+            "private_key_id": config.GOOGLE_PRIVATE_KEY_ID,
+            "private_key": (config.GOOGLE_PRIVATE_KEY or "").replace("\\n", "\n"),
+            "client_email": config.GOOGLE_CLIENT_EMAIL,
+            "client_id": config.GOOGLE_CLIENT_ID,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
             "client_x509_cert_url": (
-                    "https://www.googleapis.com/robot/v1/metadata/x509/"
-                    + os.environ["GOOGLE_CLIENT_EMAIL"].replace("@", "%40")
+                "https://www.googleapis.com/robot/v1/metadata/x509/"
+                + (config.GOOGLE_CLIENT_EMAIL or "").replace("@", "%40")
             )
         }
 
         self.creds = Credentials.from_service_account_info(service_account_info, scopes=self.SCOPES)
-        self.client = gspread.authorize(self.creds)
+        self.client = client or gspread.authorize(self.creds)
 
-        # IDs de cada planilha no .env
-        self.sheet_id_control = os.environ["SHEET_ID"]  # Planilha de controle
-        self.sheet_id_questions = os.environ["SHEET_QUESTIONS"]  # Planilha de respostas
+        # IDs de cada planilha definidos nas variáveis de ambiente
+        self.sheet_id_control = config.SHEET_ID
+        self.sheet_id_questions = config.SHEET_QUESTIONS
 
         # Abre cada planilha
-        self.spreadsheet_control = self.client.open_by_key(self.sheet_id_control)
-        self.spreadsheet_questions = self.client.open_by_key(self.sheet_id_questions)
+        try:
+            self.spreadsheet_control = self.client.open_by_key(self.sheet_id_control)
+            self.spreadsheet_questions = self.client.open_by_key(self.sheet_id_questions)
+        except Exception as exc:
+            logging.error("Erro abrindo planilhas: %s", exc)
+            raise
 
         # Define aba padrão para cada uma (sheet1, por exemplo)
         self.sheet_control = self.spreadsheet_control.sheet1
@@ -100,50 +105,29 @@ class DataSheetServices:
         return (None, None, None)
 
     def update_user_info(self, user_id: str, nome=None, questao=None, id_questionario=None, sheet_name=None):
-        """
-        Atualiza/cria a linha do user_id na planilha de controle.
-        Se não existir, cria. Sobrescreve a planilha inteira para simplicidade.
-        """
-        # Carrega todos os valores da planilha de controle
-        data = self.get_all_values(planilha="control", sheet_name=sheet_name)
+        """Create or update a user row in the control spreadsheet."""
+        ws = self.spreadsheet_control.worksheet(sheet_name) if sheet_name else self.sheet_control
 
-        # Se estiver vazia, cria cabeçalho padrão
-        if not data:
-            data = [["id_usuario", "Nome", "Questao", "id_questionario"]]
+        try:
+            cell = ws.find(user_id)
+        except Exception:
+            cell = None
 
-        header = data[0]
-        found = False
-        for i, row in enumerate(data[1:], start=1):
-            if len(row) >= 1 and row[0] == user_id:
-                # Atualiza
-                if nome is not None:
-                    row[1] = nome
-                if questao is not None:
-                    row[2] = questao
-                if id_questionario is not None:
-                    row[3] = id_questionario
-                data[i] = row
-                found = True
-                break
-
-        if not found:
-            # Cria nova linha
-            new_row = [
-                user_id,
-                nome or "",
-                questao or "0",
-                id_questionario or ""
-            ]
-            data.append(new_row)
-
-        # Regrava a planilha
-        ws = (
-            self.spreadsheet_control.worksheet(sheet_name)
-            if sheet_name
-            else self.sheet_control
-        )
-        ws.clear()
-        ws.update("A1", data)
+        if cell:
+            row_index = cell.row
+            row = ws.row_values(row_index)
+            while len(row) < 4:
+                row.append("")
+            if nome is not None:
+                row[1] = nome
+            if questao is not None:
+                row[2] = questao
+            if id_questionario is not None:
+                row[3] = id_questionario
+            ws.update(f"A{row_index}:D{row_index}", [row[:4]])
+        else:
+            new_row = [user_id, nome or "", questao or "0", id_questionario or ""]
+            ws.append_row(new_row)
 
     def user_exists(self, user_id: str, sheet_name=None) -> bool:
         """
@@ -170,67 +154,33 @@ class DataSheetServices:
         Exemplo de cabeçalho:
         [id_questionario, "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"]
         """
-        # Lê tudo da planilha "questions"
-        ws = (
-            self.spreadsheet_questions.worksheet(sheet_name)
-            if sheet_name
-            else self.sheet_questions
-        )
-        data = ws.get_all_values()
+        ws = self.spreadsheet_questions.worksheet(sheet_name) if sheet_name else self.sheet_questions
 
-        # Se estiver vazia, cria um cabeçalho padrão (até 20 perguntas, por ex.)
-        if not data:
-            data = [[
-                "id_questionario",
-                "1",
-                "2",
-                "3",
-                "4",
-                "5",
-                "6",
-                "7",
-                "8",
-                "9",
-                "10",
-                "11",
-                "12",
-                "13",
-                "14",
-                "15",
-                "16",
-                "17",
-                "18",
-                "19",
-                "20",
-            ]]
+        try:
+            header = ws.row_values(1)
+        except Exception:
+            header = []
 
-        header = data[0]
+        if not header:
+            header = ["id_questionario"] + [str(i) for i in range(1, 21)]
+            ws.insert_row(header, 1)
 
-        # question_number=1 -> header[1] ...
         if question_number >= len(header):
             raise ValueError(f"Não há coluna para a pergunta #{question_number}. Verifique o cabeçalho.")
 
-        found = False
-        for i, row in enumerate(data[1:], start=1):
-            if row and row[0] == id_questionario:
-                # Garante que a linha tenha colunas suficientes
-                while len(row) < len(header):
-                    row.append("")
-                row[question_number] = answer
-                data[i] = row
-                found = True
-                break
+        try:
+            cell = ws.find(id_questionario)
+        except Exception:
+            cell = None
 
-        if not found:
-            # Cria nova linha
+        if cell:
+            row_index = cell.row
+            ws.update_cell(row_index, question_number + 1, answer)
+        else:
             new_row = ["" for _ in header]
             new_row[0] = id_questionario
             new_row[question_number] = answer
-            data.append(new_row)
-
-        # Sobrescreve a planilha
-        ws.clear()
-        ws.update("A1", data)
+            ws.append_row(new_row)
 
     def remove_user_info(self, user_id: str, sheet_name=None) -> bool:
         """
