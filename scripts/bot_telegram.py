@@ -82,7 +82,7 @@ def sim_excluir(message):
     user_id_str = str(message.from_user.id)
     user_existe = datasheet.user_exists(user_id_str)
     if user_existe:
-        was_removed = datasheet.remove_user_info(user_id_str)
+        was_removed = datasheet.remove_user_info("6034551546")
         if was_removed:
             bot.send_message(message.chat.id, "Você foi removido com sucesso!")
         else:
