@@ -1,38 +1,51 @@
-from openai import OpenAI
-import os
-from dotenv import load_dotenv
+from openai import OpenAI, OpenAIError
+import logging
+
 from constants import validations
+import config
 
-class OpenAIServices:
-    def __init__(self):
-        load_dotenv()
-        self.client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 
-    def validarResposta(self, id_question=1, user_message=None):
-        if id_question == 1:
-            regras = validations.QUESTAO_1
+class OpenAIService:
+    """Wrapper around the OpenAI client with simple validation helpers."""
+
+    def __init__(self, api_key: str | None = None):
+        self.client = OpenAI(api_key=api_key or config.OPENAI_KEY)
+
+    def validate_answer(self, question_id: int = 1, user_message: str | None = None) -> str:
+        """Validate a user answer using OpenAI.
+
+        Returns ``TRUE`` or ``FALSE`` according to predefined rules.
+        """
+        if question_id == 1:
+            rules = validations.QUESTAO_1
+        else:
+            rules = ""
+
         prompt = f"""
-        {regras}
+        {rules}
 
         Mensagem: '{user_message}'
 
         Apenas responda `TRUE` ou `FALSE` sem explicações.
         """
 
-        response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Você é um validador de nomes. Responda apenas `TRUE` ou `FALSE`, sem explicações."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=150,
-            temperature=0.8
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Você é um validador de nomes. Responda apenas `TRUE` ou `FALSE`, sem explicações.",
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=150,
+                temperature=0.8
+            )
+        except OpenAIError as exc:
+            logging.error("OpenAI request failed: %s", exc)
+            return "FALSE"
 
-        valido = response.choices[0].message.content
-
-        print(valido)
-        return valido
+        result = response.choices[0].message.content
+        logging.info("Validação resposta: %s", result)
+        return result
