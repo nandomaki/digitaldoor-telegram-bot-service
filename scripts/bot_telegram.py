@@ -59,7 +59,7 @@ def add_new_user(message):
     bot.reply_to(message, text)
 
 
-################ FUNÇÔES DE PRINCIPAL# FUNÇÔES DE REMOÇÃO DE USUARIOS ################
+################ FUNÇÕES DE REMOÇÃO DE USUÁRIOS ################
 
 @bot.message_handler(commands=['deleteUser'])
 def deleteUser(message):
@@ -82,7 +82,7 @@ def sim_excluir(message):
     user_id_str = str(message.from_user.id)
     user_existe = datasheet.user_exists(user_id_str)
     if user_existe:
-        was_removed = datasheet.remove_user_info("6034551546")
+        was_removed = datasheet.remove_user_info(user_id_str)
         if was_removed:
             bot.send_message(message.chat.id, "Você foi removido com sucesso!")
         else:
