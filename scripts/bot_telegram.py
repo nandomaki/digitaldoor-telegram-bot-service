@@ -2,7 +2,7 @@ import telebot
 import os
 from dotenv import load_dotenv
 from scripts.datasheet_services import DataSheetServices
-from scripts.openai_services import OpenAIServices
+from scripts.gemini_services import GeminiServices
 from constants.questions import QUESTIONS, NUMERO_MAXIMO_QUESTOES
 
 load_dotenv()
@@ -10,7 +10,7 @@ CHAVE_API = os.getenv("TELEGRAM_API_KEY")
 bot = telebot.TeleBot(CHAVE_API)
 
 datasheet = DataSheetServices()
-openai_services = OpenAIServices()
+gemini_services = GeminiServices()
 
 
 ################ FUNÇÔES DE CONTROLE DE USUÀRIOS ################
@@ -107,8 +107,7 @@ def handle_message(message):
 
         # Se o usuário foi criado com questao=-99, quer dizer que estamos aguardando nome
         if questao_str == '-99':
-            # Valida nome usando OpenAI
-            nome_valido = openai_services.validarResposta(1, message.text)
+            nome_valido = gemini_services.validarResposta(1, message.text)
 
             if nome_valido.strip().upper() == 'TRUE':
                 # Atualiza o cadastro para questao=0 e insere o nome
